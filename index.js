@@ -17,20 +17,20 @@ app.post('/api/ask', async (req, res) => {
     return res.status(400).json({ error: 'Question required' });
   }
 
-  // ── Problem 4: Strict Provider Validation ──
   const requestedProvider = provider.toLowerCase();
   if (requestedProvider !== 'gemini' && requestedProvider !== 'groq') {
     return res.status(400).json({ error: `Invalid provider '${provider}'. Must be 'gemini' or 'groq'.` });
   }
 
-  // ── Problem 3: Missing API key validation ──
   const apiKey = requestedProvider === 'gemini' ? process.env.GEMINI_API_KEY : process.env.GROQ_API_KEY;
   if (!apiKey) {
     console.error(`[Config Error] Missing API key for ${requestedProvider}`);
     return res.status(500).json({ error: 'Server configuration error. API key missing.' });
   }
 
-  const systemPrompt = 'You are Prism, a helpful personal operating system assistant. Keep answers concise, calm, and actionable. Use bullet points if helpful.';
+  const systemPrompt = `You are Prism, a helpful personal operating system assistant. Keep answers concise, calm, and actionable. Use bullet points if helpful.
+
+  CRITICAL INSTRUCTION: You have the ability to control the user's app. If the user asks you to add a task, you MUST reply with exactly: "ACTION:ADD_TASK: [task name]" and nothing else. If they ask to start a focus session, reply exactly: "ACTION:START_FOCUS: [minutes]". Otherwise, just chat normally.`;
   const userContent = context ? `Context about my day:\n${context}\n\nQuestion: ${question}` : question;
 
   try {
@@ -38,7 +38,6 @@ app.post('/api/ask', async (req, res) => {
 
     if (requestedProvider === 'gemini') {
       // ── GEMINI API ──
-      // Problem 2: gemini-3.8-flash is valid, keeping it.
       const ai = new GoogleGenAI({ apiKey: apiKey });
       const response = await ai.models.generateContent({
         model: 'gemini-3.8-flash', 
@@ -56,7 +55,7 @@ app.post('/api/ask', async (req, res) => {
       });
       
       const response = await groq.chat.completions.create({
-        model: 'openai/gpt-oss-20b', // Problem 1: Updated to supported model
+        model: 'openai/gpt-oss-120b', // Updated to the latest flagship model
         messages: [
           { role: 'system', content: systemPrompt },
           { role: 'user', content: userContent }
@@ -68,11 +67,7 @@ app.post('/api/ask', async (req, res) => {
 
     res.json({ answer });
   } catch (error) {
-    // ── Problem 5: Controlled error handling ──
-    // Log the full technical details on the server...
     console.error(`[${requestedProvider.toUpperCase()} API Error]`, error);
-    
-    // ...but return a clean, generic message to the Flutter client.
     res.status(500).json({ error: 'The AI service is currently unavailable. Please try again later.' });
   }
 });
