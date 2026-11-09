@@ -12,7 +12,23 @@ app.get('/health', (req, res) => res.json({ status: 'ok', service: 'prism-backen
 
 app.post('/api/ask', async (req, res) => {
   const { question, context, provider = 'groq' } = req.body;
-  if (!question) return res.status(400).json({ error: 'Question required' });
+  
+  if (!question) {
+    return res.status(400).json({ error: 'Question required' });
+  }
+
+  // ── Problem 4: Strict Provider Validation ──
+  const requestedProvider = provider.toLowerCase();
+  if (requestedProvider !== 'gemini' && requestedProvider !== 'groq') {
+    return res.status(400).json({ error: `Invalid provider '${provider}'. Must be 'gemini' or 'groq'.` });
+  }
+
+  // ── Problem 3: Missing API key validation ──
+  const apiKey = requestedProvider === 'gemini' ? process.env.GEMINI_API_KEY : process.env.GROQ_API_KEY;
+  if (!apiKey) {
+    console.error(`[Config Error] Missing API key for ${requestedProvider}`);
+    return res.status(500).json({ error: 'Server configuration error. API key missing.' });
+  }
 
   const systemPrompt = 'You are Prism, a helpful personal operating system assistant. Keep answers concise, calm, and actionable. Use bullet points if helpful.';
   const userContent = context ? `Context about my day:\n${context}\n\nQuestion: ${question}` : question;
@@ -20,11 +36,12 @@ app.post('/api/ask', async (req, res) => {
   try {
     let answer = '';
 
-    if (provider === 'gemini') {
+    if (requestedProvider === 'gemini') {
       // ── GEMINI API ──
-      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+      // Problem 2: gemini-3.8-flash is valid, keeping it.
+      const ai = new GoogleGenAI({ apiKey: apiKey });
       const response = await ai.models.generateContent({
-        model: 'gemini-3.8-flash', // Correct latest Gemini model
+        model: 'gemini-3.8-flash', 
         contents: userContent,
         config: {
           systemInstruction: systemPrompt,
@@ -34,12 +51,12 @@ app.post('/api/ask', async (req, res) => {
     } else {
       // ── GROQ API ──
       const groq = new OpenAI({
-        apiKey: process.env.GROQ_API_KEY,
+        apiKey: apiKey,
         baseURL: 'https://api.groq.com/openai/v1',
       });
       
       const response = await groq.chat.completions.create({
-        model: 'llama-3.1-8b-instant', // Correct current 8B model for Groq
+        model: 'openai/gpt-oss-20b', // Problem 1: Updated to supported model
         messages: [
           { role: 'system', content: systemPrompt },
           { role: 'user', content: userContent }
@@ -51,8 +68,12 @@ app.post('/api/ask', async (req, res) => {
 
     res.json({ answer });
   } catch (error) {
-    console.error(`[${provider.toUpperCase()} Error]`, error);
-    res.status(500).json({ error: `Failed to contact ${provider}`, details: error.message });
+    // ── Problem 5: Controlled error handling ──
+    // Log the full technical details on the server...
+    console.error(`[${requestedProvider.toUpperCase()} API Error]`, error);
+    
+    // ...but return a clean, generic message to the Flutter client.
+    res.status(500).json({ error: 'The AI service is currently unavailable. Please try again later.' });
   }
 });
 
