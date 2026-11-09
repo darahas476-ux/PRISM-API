@@ -8,6 +8,7 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+// Health check for Render
 app.get('/health', (req, res) => res.json({ status: 'ok', service: 'prism-backend' }));
 
 app.post('/api/ask', async (req, res) => {
@@ -24,7 +25,7 @@ app.post('/api/ask', async (req, res) => {
       // ── GEMINI API ──
       const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
       const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+        model: 'gemini-3.8-flash', // Updated per your API's exact instructions
         contents: userContent,
         config: {
           systemInstruction: systemPrompt,
@@ -32,14 +33,14 @@ app.post('/api/ask', async (req, res) => {
       });
       answer = response.text;
     } else {
-      // ── GROQ API (OpenAI Compatible) ──
+      // ── GROQ API ──
       const groq = new OpenAI({
         apiKey: process.env.GROQ_API_KEY,
         baseURL: 'https://api.groq.com/openai/v1',
       });
       
       const response = await groq.chat.completions.create({
-        model: 'llama-3.3-70b-versatile', // Fast and very smart
+        model: 'llama3-70b-8192', // Swapped to a stable, universally available Groq model
         messages: [
           { role: 'system', content: systemPrompt },
           { role: 'user', content: userContent }
